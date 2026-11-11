@@ -1,117 +1,139 @@
 import Link from "next/link";
-import { getVendors, isConfigured } from "@/lib/data";
+import { notFound } from "next/navigation";
+import { getVendorBySlug, getVendors } from "@/lib/data";
 import { photo } from "@/lib/photo";
-import QuoteBuilder from "./components/QuoteBuilder";
+import { CATEGORY_LABEL } from "@/lib/types";
+import { manwon, stars, won } from "@/lib/pricing";
 import { REVIEWS } from "@/lib/reviews";
 
 export const revalidate = 0;
 
-export default async function Home() {
+export async function generateStaticParams() {
   const vendors = await getVendors();
-  const dbReady = isConfigured();
+  return vendors.map((v) => ({ slug: v.slug }));
+}
+
+export default async function VendorPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const v = await getVendorBySlug(slug);
+  if (!v) notFound();
+
+  const required = v.addons.filter((a) => a.required);
+  const requiredSum = required.reduce((s, a) => s + a.amount, 0);
+  const maxSum = v.addons.reduce((s, a) => s + a.amount, 0);
+  const seed = v.slug.charCodeAt(0) % REVIEWS.length;
 
   return (
     <main className="page">
-      <section className="hero">
-        <div className="art" style={{ backgroundImage: photo("mundansok-hero", "hero") }} />
-        <div className="scrim" />
-        <div className="wrap gut">
-          <div className="in">
-            <span className="eyebrow">선언되지 않은 추가금 0원 보증</span>
-            <h1>견적은 모두가 준다.<br />책임은 우리가 진다.</h1>
-            <p className="sub">
-              날짜를 고르면 추가금과 할인이 반영된 총액이 그 자리에서 확정됩니다.
-              그리고 그 숫자를 저희가 책임집니다.
+      <div className="phead">
+        <div className="wrap gut in">
+          <div className="crumb">
+            <Link href="/">홈</Link> · {CATEGORY_LABEL[v.category]} · {v.name}
+          </div>
+          <h1>{v.name}</h1>
+          <p>
+            {v.area} · <span className="stars">{stars(v.rating)}</span>{" "}
+            {Number(v.rating).toFixed(1)} ({v.review_count}개 후기)
+          </p>
+        </div>
+      </div>
+
+      <div className="wrap gut" style={{ paddingTop: 22 }}>
+        <div className="vhero" style={{ backgroundImage: photo(v.slug, v.category) }} />
+        <div className="gal">
+          {[1, 2, 3].map((i) => (
+            <div key={i} style={{ backgroundImage: photo(`${v.slug}-g${i}`, v.category) }} />
+          ))}
+        </div>
+
+        <div className="cols" style={{ marginTop: 28 }}>
+          <div>
+            <h3 className="sec">소개</h3>
+            <p className="lead">{v.description}</p>
+
+            <h3 className="sec" style={{ marginTop: 28 }}>선언된 추가금 전체</h3>
+            <p className="lead">
+              이 목록이 이 업체가 청구할 수 있는 금액의 전부입니다. 여기 없는 명목으로
+              청구된 금액은 저희가 부담합니다.
             </p>
-            <div className="vow">
-              <b>선언되지 않은 추가금은 0원입니다.</b> 발생하면 저희가 부담합니다.
-              <span>
-                업체는 입점할 때 발생 가능한 추가금을 전부 등록합니다. 거기 없는
-                금액은 청구되지 않습니다.
-              </span>
+            <div className="card">
+              <table className="mtable">
+                <tbody>
+                  {v.addons.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        {a.name}{" "}
+                        {a.required && <span className="a-req">필수</span>}
+                      </td>
+                      <td className="r">+{won(a.amount)}원</td>
+                    </tr>
+                  ))}
+                  {v.addons.length === 0 && (
+                    <tr><td>선언된 추가금이 없습니다. 기본가가 곧 총액입니다.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="callout">
+              <b>이 목록이 전부입니다.</b> 고객이 앱에서 무엇을 체크했는지가 시점과 함께
+              기록되므로, 분쟁이 생기면 그 기록 자체가 증거가 됩니다. 보증은{" "}
+              <Link href="/" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                저희를 통해 계약한 건
+              </Link>
+              에만 적용됩니다.
+            </div>
+
+            <h3 className="sec" style={{ marginTop: 32 }}>최근 후기</h3>
+            <div className="revs">
+              {[0, 1].map((k) => {
+                const r = REVIEWS[(seed + k) % REVIEWS.length];
+                return (
+                  <div className="rev" key={k}>
+                    <div className="who">
+                      <span className="av" style={{ background: r.c }}>{r.nm.charAt(0)}</span>
+                      <span>
+                        <span className="nm">{r.nm}</span> <span className="dt">· {r.dt}</span>
+                        <br /><span className="stars">{"★".repeat(r.st)}{"☆".repeat(5 - r.st)}</span>
+                      </span>
+                    </div>
+                    <div className="tx">{r.tx}</div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="stats">
-        <div className="wrap gut in">
-          <div className="c"><div className="k">누적 보증 발급</div><div className="v">1,284<small>건</small></div></div>
-          <div className="c"><div className="k">평균 절감액</div><div className="v">61<small>만원</small></div></div>
-          <div className="c"><div className="k">입점 업체</div><div className="v">{vendors.length}<small>곳</small></div></div>
-          <div className="c"><div className="k">미고지 추가금 보상</div><div className="v">100<small>%</small></div></div>
-        </div>
-      </section>
-
-      <QuoteBuilder vendors={vendors} dbReady={dbReady} />
-
-      <section className="band">
-        <div className="wrap gut in">
-          <h3 className="sec">보증서를 받은 분들</h3>
-          <p className="lead">실제 결제액이 견적과 달랐을 때 어떻게 처리됐는지에 대한 후기입니다.</p>
-          <div className="revs">
-            {REVIEWS.slice(0, 3).map((r) => (
-              <div className="rev" key={r.nm + r.dt}>
-                <div className="who">
-                  <span className="av" style={{ background: r.c }}>{r.nm.charAt(0)}</span>
-                  <span>
-                    <span className="nm">{r.nm}</span> <span className="dt">· {r.dt}</span>
-                    <br /><span className="stars">{"★".repeat(r.st)}{"☆".repeat(5 - r.st)}</span>
-                  </span>
-                </div>
-                <div className="tx">{r.tx}</div>
-                <div className="saved">{r.saved}</div>
+          <aside className="quote">
+            <div className="qbox">
+              <div className="qhead"><h2>가격 구조</h2><span className="seal">전부 공개</span></div>
+              <div className="qbody">
+                <div className="qrow"><span className="n">기본가</span><span className="v">{won(v.base_price)}</span></div>
+                <div className="qrow"><span className="n">필수 추가금 {required.length}건</span><span className="v">+{won(requiredSum)}</span></div>
+                <div className="qrow sub"><span className="n">최소 결제액</span><span className="v">{won(v.base_price + requiredSum)}</span></div>
+                <div className="qrow"><span className="n">선택 추가금 전부 포함 시</span><span className="v">{won(v.base_price + maxSum)}</span></div>
               </div>
-            ))}
-          </div>
+              <div className="qtotal">
+                <div className="lab">최소 — 최대</div>
+                <div className="num" style={{ fontSize: 20 }}>
+                  {manwon(v.base_price + requiredSum)} – {manwon(v.base_price + maxSum)}<small>원</small>
+                </div>
+              </div>
+              <div className="guarantee">
+                이 범위를 벗어난 청구는 발생할 수 없습니다. <b>발생하면 저희가 부담합니다.</b>
+              </div>
+              <div className="qcta">
+                <Link className="solid" href="/">날짜 골라서 견적 받기</Link>
+                <Link className="ghost" href="/claims/new">추가금을 청구받으셨나요?</Link>
+              </div>
+            </div>
+          </aside>
         </div>
-      </section>
-
-      <section className="wrap gut" style={{ marginTop: 38 }}>
-        <h3 className="sec">자주 묻는 질문</h3>
-        <p className="lead">보증의 범위와 한계에 대한 질문이 가장 많습니다.</p>
-
-        <details className="faq">
-          <summary>업체와 직접 계약하면 더 싸지 않나요?</summary>
-          <div className="ans">
-            가격은 같을 수 있습니다. 다른 것은 <b>보증</b>입니다. 저희를 거치지 않은
-            계약은 미고지 추가금이 나와도 보상 대상이 아닙니다. 저희가 파는 것은
-            소개가 아니라 보증입니다.
-          </div>
-        </details>
-        <details className="faq">
-          <summary>인기 날짜도 예약할 수 있나요?</summary>
-          <div className="ans">
-            성수기 주말은 저희가 다루는 영역이 아닙니다. 저희는 <b>비수기 · 평일
-            슬롯</b>만 받습니다. 비어 있는 날짜를 낮은 가격에 내놓는 것 자체가 수요
-            분산 장치입니다.
-          </div>
-        </details>
-        <details className="faq">
-          <summary>드레스는 사진으로 고를 수 없다던데요?</summary>
-          <div className="ans">
-            맞습니다. 그래서 저희도 사진으로 결정시키지 않습니다. <b>가격과 날짜로
-            세 곳을 추려서 보러 가게 하는 것</b>이 저희 역할입니다. 직방이 집 사진만으로
-            계약시키지 않는 것과 같습니다.
-          </div>
-        </details>
-        <details className="faq">
-          <summary>플래너가 해주던 나머지 일은 누가 하나요?</summary>
-          <div className="ans">
-            플래너가 실제로 파는 것은 할인이 아니라 <b>순서</b>입니다. 예식일을 넣으면
-            12개월 역산 체크리스트가 생성되고 마감 임박 항목이 표시됩니다.{" "}
-            <Link href="/timeline" style={{ color: "var(--accent)", textDecoration: "underline" }}>준비 타임라인</Link>에서 확인하실 수 있습니다.
-          </div>
-        </details>
-        <details className="faq">
-          <summary>보증 한도는 얼마인가요?</summary>
-          <div className="ans">
-            건당 <b>50만 원</b>이며 월 총액 상한이 별도로 있습니다. 보상액의 50%는
-            해당 업체에 구상하고, 미고지가 반복되는 업체는 입점이 제한됩니다.{" "}
-            <Link href="/guarantee" style={{ color: "var(--accent)", textDecoration: "underline" }}>보증 범위</Link>에 자세한 기준이 있습니다.
-          </div>
-        </details>
-      </section>
+      </div>
     </main>
   );
 }
